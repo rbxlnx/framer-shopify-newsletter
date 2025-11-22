@@ -1,6 +1,6 @@
 export async function POST(req) {
   try {
-    // 🔥 Leggi FormData dal form Framer
+    // Framer invia MULTIPART/FORM-DATA, non JSON
     const formData = await req.formData();
 
     const firstName = formData.get("firstName") || "";
@@ -8,7 +8,6 @@ export async function POST(req) {
     const email = formData.get("email") || "";
     const category = formData.get("category") || "";
 
-    // 🔥 Costruzione customer per Shopify
     const customer = {
       first_name: firstName,
       last_name: lastName,
@@ -30,14 +29,8 @@ export async function POST(req) {
 
     const data = await response.json();
 
-    return Response.json({ ok: true, shopify: data });
+    return Response.json({ ok: true, data });
   } catch (error) {
-    return Response.json(
-      {
-        ok: false,
-        error: error.message,
-      },
-      { status: 400 }
-    );
+    return Response.json({ ok: false, error: error.message }, { status: 400 });
   }
 }
