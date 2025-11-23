@@ -13,6 +13,13 @@ export async function POST(req) {
       first_name: firstName,
       last_name: lastName,
       email: email,
+
+      // ⭐ NEW: iscrizione automatica alle email Shopify
+      email_marketing_consent: {
+        state: "subscribed",
+        opt_in_level: "single_opt_in"
+      },
+
       tags: [`categoria:${category}`],
     };
 
@@ -31,8 +38,7 @@ export async function POST(req) {
 
     const data = await response.json().catch(() => ({}));
 
-    // ⭐ NUOVA LOGICA ⭐
-    // Se Shopify risponde 409 o cliente già esistente → NON errore
+    // ⭐ Se il cliente esiste già → NON errore
     if (response.status === 422 || response.status === 409) {
       console.warn("Shopify says customer exists already:", data);
       return new Response(JSON.stringify({ ok: true, alreadyExists: true }), {
@@ -41,14 +47,16 @@ export async function POST(req) {
       });
     }
 
+    // ⭐ Gestione errori reali
     if (!response.ok) {
       console.error("Shopify error:", data);
       return new Response(JSON.stringify({ ok: false, shopifyError: data }), {
-        status: 200, // ⭐ Rispondiamo 200 a Framer comunque
+        status: 200, // Framer vuole comunque successo
         headers: { "Content-Type": "application/json" },
       });
     }
 
+    // ⭐ Successo pieno
     return new Response(JSON.stringify({ ok: true, data }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -58,7 +66,7 @@ export async function POST(req) {
     console.error("Unexpected server error:", error);
 
     return new Response(JSON.stringify({ ok: false, error: error.message }), {
-      status: 200, // ⭐ Anche qui rispondiamo “OK” a Framer
+      status: 200, // Evita errori Framer
       headers: { "Content-Type": "application/json" },
     });
   }
