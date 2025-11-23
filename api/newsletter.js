@@ -1,59 +1,45 @@
-import { NextResponse } from "next/server";
-
 export async function POST(req) {
   try {
-    let email = "";
+    // Framer invia MULTIPART/FORM-DATA
+    const formData = await req.formData();
 
-    // ---- 1) Proviamo a leggere JSON ----
-    try {
-      const json = await req.json();
-      if (json && json.email) {
-        email = json.email;
-      }
-    } catch (_) {
-      // ignoriamo l'errore: significa che NON era JSON
-    }
+    const firstName = formData.get("firstName") || "";
+    const lastName = formData.get("lastName") || "";
+    const email = formData.get("email") || "";
+    const category = formData.get("category") || "";
 
-    // ---- 2) Se non è JSON, proviamo FormData ----
-    if (!email) {
-      const formData = await req.formData();
-      email = formData.get("email") || "";
-    }
+    const customer = {
+      first_name: firstName,
+      last_name: lastName,
+      email: email,
+      tags: [`categoria:${category}`],
+    };
 
-    // ---- 3) Se ancora non abbiamo l'email → errore ----
-    if (!email) {
-      return NextResponse.json(
-        { error: "Email mancante" },
-        { status: 400 }
+    const url = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/customers.json`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
+      },
+      body: JSON.stringify({ customer }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return Response.json(
+        { ok: false, shopifyError: data },
+        { status: response.status }
       );
     }
 
-    // ---- 4) Chiamata Shopify ----
-    const shopifyResponse = await fetch(
-      "https://c3e1a4-0b.myshopify.com/admin/api/2024-01/customers.json",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // ⬇⬇⬇ QUESTA È LA CORREZIONE ⬇⬇⬇
-          "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
-        },
-        body: JSON.stringify({
-          customer: {
-            email,
-            accepts_marketing: true,
-          },
-        }),
-      }
-    );
-
-    const data = await shopifyResponse.json();
-    return NextResponse.json({ ok: true, data });
-
+    return Response.json({ ok: true, data });
   } catch (error) {
-    return NextResponse.json(
-      { error: String(error) },
-      { status: 500 }
+    return Response.json(
+      { ok: false, error: error.message },
+      { status: 400 }
     );
   }
 }
