@@ -1,12 +1,14 @@
 export async function POST(req) {
   try {
-    // Framer invia MULTIPART/FORM-DATA
-    const formData = await req.formData();
+    // Framer invia JSON, non multipart/form-data
+    const body = await req.json();
 
-    const firstName = formData.get("firstName") || "";
-    const lastName = formData.get("lastName") || "";
-    const email = formData.get("email") || "";
-    const category = formData.get("category") || "";
+    const firstName = body.firstName || "";
+    const lastName = body.lastName || "";
+    const email = body.email || "";
+    const category = body.category || "";
+
+    console.log("Incoming JSON from Framer:", body);
 
     const customer = {
       first_name: firstName,
@@ -17,8 +19,6 @@ export async function POST(req) {
 
     const url = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/customers.json`;
 
-    // LOG per capire cosa arriva a Vercel
-    console.log("Incoming form data:", { firstName, lastName, email, category });
     console.log("Calling Shopify:", url);
 
     const response = await fetch(url, {
@@ -32,37 +32,35 @@ export async function POST(req) {
 
     const data = await response.json();
 
-    // LOG dell'errore Shopify (se c'è)
     if (!response.ok) {
       console.error("Shopify error:", data);
 
-      return new Response(JSON.stringify({
-        ok: false,
-        shopifyError: data
-      }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ ok: false, shopifyError: data }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Risposta OK verso Framer
-    return new Response(JSON.stringify({
-      ok: true,
-      data
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ ok: true, data }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
 
   } catch (error) {
     console.error("Unexpected server error:", error);
 
-    return new Response(JSON.stringify({
-      ok: false,
-      error: error.message
-    }), {
-      status: 400, // IMPORTANTE → NO 500 per Framer
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ ok: false, error: error.message }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 }
