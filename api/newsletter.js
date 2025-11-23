@@ -35,7 +35,8 @@ export async function POST(req) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_API,
+          // ⬇⬇⬇ QUESTA È LA CORREZIONE ⬇⬇⬇
+          "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
         },
         body: JSON.stringify({
           customer: {
