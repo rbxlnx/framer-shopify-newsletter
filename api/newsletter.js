@@ -28,18 +28,23 @@ export async function POST(req) {
 
     const data = await response.json();
 
+    // se Shopify risponde errore → NON mandiamo 500 → Framer non si incazza
     if (!response.ok) {
-      return Response.json(
-        { ok: false, shopifyError: data },
-        { status: response.status }
-      );
+      return new Response(JSON.stringify({ ok: false, shopifyError: data }), {
+        status: response.status,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    return Response.json({ ok: true, data });
+    return new Response(JSON.stringify({ ok: true, data }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
   } catch (error) {
-    return Response.json(
-      { ok: false, error: error.message },
-      { status: 400 }
-    );
+    return new Response(JSON.stringify({ ok: false, error: error.message }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
