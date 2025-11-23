@@ -1,55 +1,41 @@
 export async function POST(req) {
+  console.log("🔔 Newsletter API hit");
+
+  let firstName = "";
+  let lastName = "";
+  let email = "";
+  let category = "";
+
   try {
-    console.log("🔔 Newsletter API hit");
-
-    let firstName = "";
-    let lastName = "";
-    let email = "";
-    let category = "";
-
+    // Controllo content-type
     const contentType = req.headers.get("content-type") || "";
-
     console.log("📦 Content-Type:", contentType);
 
-    // --- CASE 1: multipart/form-data (Framer vecchio) ---
+    // Caso 1: FRAMER → multipart/form-data
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
       firstName = formData.get("firstName") || "";
       lastName = formData.get("lastName") || "";
       email = formData.get("email") || "";
       category = formData.get("category") || "";
-      console.log("📥 Parsed from FORM-DATA:", { firstName, lastName, email, category });
     }
 
-    // --- CASE 2: JSON (Framer nuovo) ---
+    // Caso 2: JSON → usato per test o altre integrazioni
     else if (contentType.includes("application/json")) {
       const body = await req.json();
+      console.log("📥 Parsed from JSON:", body);
       firstName = body.firstName || "";
       lastName = body.lastName || "";
       email = body.email || "";
       category = body.category || "";
-      console.log("📥 Parsed from JSON:", { firstName, lastName, email, category });
     }
 
-    // --- CASE 3: Unknown format ---
+    // Nessun formato valido
     else {
-      console.log("❌ Unsupported Content-Type");
-      return Response.json(
-        { ok: false, error: "Unsupported Content-Type" },
-        { status: 400 }
-      );
+      throw new Error("Content-Type non supportato");
     }
 
-    // --- Validate email ---
-    if (!email || !email.includes("@")) {
-      console.log("❌ Invalid or missing email");
-      return Response.json(
-        { ok: false, error: "Missing or invalid email" },
-        { status: 400 }
-      );
-    }
-
-    // --- Shopify customer payload ---
+    // Customer object
     const customer = {
       first_name: firstName,
       last_name: lastName,
@@ -60,22 +46,23 @@ export async function POST(req) {
           namespace: "custom",
           key: "categoria_newsletter",
           value: category,
-          type: "single_line_text_field"
-        }
-      ]
+          type: "single_line_text_field",
+        },
+      ],
     };
 
     console.log("🚀 Sending to Shopify:", customer);
 
+    // CHIAMATA API SHOPIFY
     const response = await fetch(
       `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/customers.json`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN
+          "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
         },
-        body: JSON.stringify({ customer })
+        body: JSON.stringify({ customer }),
       }
     );
 
@@ -84,9 +71,11 @@ export async function POST(req) {
     console.log("📨 Shopify response:", data);
 
     return Response.json({ ok: true, data });
-
   } catch (error) {
-    console.error("💥 Newsletter API error:", error);
-    return Response.json({ ok: false, error: error.message }, { status: 400 });
+    console.error("❌ Newsletter API error:", error);
+    return Response.json(
+      { ok: false, error: error.message },
+      { status: 400 }
+    );
   }
 }
