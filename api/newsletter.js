@@ -30,7 +30,7 @@ export async function POST(req) {
 
     // ---- 4) Chiamata Shopify ----
     const shopifyResponse = await fetch(
-      "https://tuo-store.myshopify.com/admin/api/2024-01/customers.json",
+      "https://c3e1a4-0b.myshopify.com/admin/api/2024-01/customers.json",
       {
         method: "POST",
         headers: {
