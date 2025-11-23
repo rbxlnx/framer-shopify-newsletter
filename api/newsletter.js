@@ -1,73 +1,116 @@
 export async function POST(req) {
   try {
-    const body = await req.json();
+    // Framer invia MULTIPART/FORM-DATA
+    const formData = await req.formData();
 
-    const firstName = body.firstName || "";
-    const lastName = body.lastName || "";
-    const email = body.email || "";
-    const category = body.category || "";
+    const firstName = formData.get("firstName") || "";
+    const lastName = formData.get("lastName") || "";
+    const email = formData.get("email") || "";
+    const category = formData.get("category") || "";
 
-    console.log("Incoming JSON from Framer:", body);
-
-    const customer = {
+    // ---------------------------------------
+    // 1️⃣  Costruzione dati cliente
+    // ---------------------------------------
+    const customerPayload = {
       first_name: firstName,
       last_name: lastName,
       email: email,
-
-      // ⭐ NEW: iscrizione automatica alle email Shopify
-      email_marketing_consent: {
-        state: "subscribed",
-        opt_in_level: "single_opt_in"
-      },
-
       tags: [`categoria:${category}`],
+      metafields: [
+        {
+          namespace: "custom",
+          key: "categoria_newsletter",
+          type: "single_line_text_field",
+          value: category
+        }
+      ]
     };
 
-    const url = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/customers.json`;
+    // ---------------------------------------
+    // 2️⃣  Tentiamo di creare il cliente
+    // ---------------------------------------
+    const createRes = await fetch(
+      `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/customers.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
+        },
+        body: JSON.stringify({ customer: customerPayload }),
+      }
+    );
 
-    console.log("Calling Shopify:", url);
+    const createData = await createRes.json();
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
-      },
-      body: JSON.stringify({ customer }),
-    });
+    // ---------------------------------------
+    // 3️⃣  Se il cliente esiste già → aggiorniamo solo metafield + tag
+    // ---------------------------------------
+    if (createData.errors?.email?.includes("has already been taken")) {
+      console.log("Customer exists → updating metafield…");
 
-    const data = await response.json().catch(() => ({}));
+      // Recuperiamo l'ID cliente
+      const existingRes = await fetch(
+        `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/customers/search.json?query=email:${email}`,
+        {
+          headers: {
+            "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
+          },
+        }
+      );
 
-    // ⭐ Se il cliente esiste già → NON errore
-    if (response.status === 422 || response.status === 409) {
-      console.warn("Shopify says customer exists already:", data);
-      return new Response(JSON.stringify({ ok: true, alreadyExists: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
+      const existingData = await existingRes.json();
+      const customer = existingData.customers?.[0];
+      if (!customer)
+        return Response.json({ ok: false, error: "Customer not found after duplicate error" });
+
+      const customerId = customer.id;
+
+      // ---------------------------------------
+      // PATCH → aggiorna solo ciò che serve
+      // ---------------------------------------
+      const updateRes = await fetch(
+        `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/customers/${customerId}.json`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": process.env.SHOPIFY_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            customer: {
+              id: customerId,
+              tags: [...customer.tags.split(", "), `categoria:${category}`],
+              metafields: [
+                {
+                  namespace: "custom",
+                  key: "categoria_newsletter",
+                  type: "single_line_text_field",
+                  value: category
+                }
+              ]
+            }
+          }),
+        }
+      );
+
+      const updateData = await updateRes.json();
+
+      return Response.json({
+        ok: true,
+        updated: true,
+        customerId,
+        data: updateData
       });
     }
 
-    // ⭐ Gestione errori reali
-    if (!response.ok) {
-      console.error("Shopify error:", data);
-      return new Response(JSON.stringify({ ok: false, shopifyError: data }), {
-        status: 200, // Framer vuole comunque successo
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // ⭐ Successo pieno
-    return new Response(JSON.stringify({ ok: true, data }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    // ---------------------------------------
+    // 4️⃣  Cliente creato con successo
+    // ---------------------------------------
+    return Response.json({ ok: true, created: true, data: createData });
 
   } catch (error) {
-    console.error("Unexpected server error:", error);
-
-    return new Response(JSON.stringify({ ok: false, error: error.message }), {
-      status: 200, // Evita errori Framer
-      headers: { "Content-Type": "application/json" },
-    });
+    console.error("Newsletter API error:", error);
+    return Response.json({ ok: false, error: error.message }, { status: 400 });
   }
 }
