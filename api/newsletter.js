@@ -1,6 +1,5 @@
 export async function POST(req) {
   try {
-    // Framer invia JSON, non multipart/form-data
     const body = await req.json();
 
     const firstName = body.firstName || "";
@@ -30,37 +29,37 @@ export async function POST(req) {
       body: JSON.stringify({ customer }),
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
+
+    // ⭐ NUOVA LOGICA ⭐
+    // Se Shopify risponde 409 o cliente già esistente → NON errore
+    if (response.status === 422 || response.status === 409) {
+      console.warn("Shopify says customer exists already:", data);
+      return new Response(JSON.stringify({ ok: true, alreadyExists: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     if (!response.ok) {
       console.error("Shopify error:", data);
-
-      return new Response(
-        JSON.stringify({ ok: false, shopifyError: data }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ ok: false, shopifyError: data }), {
+        status: 200, // ⭐ Rispondiamo 200 a Framer comunque
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, data }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ ok: true, data }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
 
   } catch (error) {
     console.error("Unexpected server error:", error);
 
-    return new Response(
-      JSON.stringify({ ok: false, error: error.message }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ ok: false, error: error.message }), {
+      status: 200, // ⭐ Anche qui rispondiamo “OK” a Framer
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
